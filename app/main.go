@@ -7,6 +7,17 @@ import (
 	"strings"
 )
 
+func handle_command(cmd string) {
+	if cmd == "exit" {
+		os.Exit(0)
+	} else if after, found := strings.CutPrefix(cmd, "echo"); found {
+		fmt.Print(strings.TrimSpace(after))
+	} else {
+		fmt.Printf("%s: command not found", cmd)
+	}
+	fmt.Print("\n")
+}
+
 func main() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -17,9 +28,6 @@ func main() {
 			os.Exit(1)
 		}
 		command = strings.TrimSpace(command)
-		if command == "exit" {
-			break
-		}
-		fmt.Printf("%s: command not found\n", command)
+		handle_command(command)
 	}
 }
