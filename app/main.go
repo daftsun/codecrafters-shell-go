@@ -15,7 +15,11 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("$ ")
-		line, _ := reader.ReadString('\n')
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error reading input: ", err)
+			os.Exit(1)
+		}
 
 		fields := strings.Fields(line)
 		if len(fields) == 0 {
@@ -23,29 +27,29 @@ func main() {
 		}
 
 		command := fields[0]
-		switch command {
-		case "exit":
+		if command == "exit" {
 			return
-		case "echo":
+		} else if command == "echo" {
 			fmt.Println(strings.Join(fields[1:], " "))
-		case "type":
-			type_command(fields[1:])
-		default:
+		} else if command == "type" {
+			handleType(fields[1])
+		} else if _, err := exec.LookPath(command); err == nil {
+			cmd := exec.Command(command, fields[1:]...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Run()
+		} else {
 			fmt.Printf("%s: command not found\n", command)
 		}
 	}
 }
 
-func type_command(args []string) {
-	if len(args) > 0 {
-		for _, arg := range args {
-			if slices.Contains(builtins, arg) {
-				fmt.Printf("%s is a shell builtin\n", arg)
-			} else if path, _ := exec.LookPath(arg); path != "" {
-				fmt.Printf("%s is %s\n", arg, path)
-			} else {
-				fmt.Printf("%s: not found\n", arg)
-			}
-		}
+func handleType(command string) {
+	if slices.Contains(builtins, command) {
+		fmt.Printf("%s is a shell builtin\n", command)
+	} else if path, err := exec.LookPath(command); err == nil {
+		fmt.Printf("%s is %s\n", command, path)
+	} else {
+		fmt.Printf("%s: not found\n", command)
 	}
 }
