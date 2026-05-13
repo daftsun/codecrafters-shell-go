@@ -18,10 +18,8 @@ func main() {
 		"echo": func(shellArgs []string) { fmt.Println(strings.Join(shellArgs, " ")) },
 		"type": handleType,
 		"pwd": func(shellArgs []string) {
-			pwd, err := os.Getwd()
-			if err == nil {
-				fmt.Println(pwd)
-			}
+			pwd, _ := os.Getwd()
+			fmt.Println(pwd)
 		},
 		"cd": handleCd,
 	}
@@ -67,7 +65,10 @@ func handleType(shellArgs []string) {
 }
 
 func handleCd(shellArgs []string) {
-	if _, err := os.Stat(shellArgs[0]); err != nil {
+	if shellArgs[0] == "~" {
+		home_dir, _ := os.UserHomeDir()
+		os.Chdir(home_dir)
+	} else if _, err := os.Stat(shellArgs[0]); err != nil {
 		fmt.Printf("cd: %s: No such file or directory\n", shellArgs[0])
 	} else {
 		os.Chdir(shellArgs[0])
