@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-var builtins = []string{"exit", "echo", "type"}
+var builtins = []string{"exit", "echo", "type", "pwd"}
 
 func main() {
 	reader := bufio.NewReader(os.Stdin)
@@ -33,6 +33,12 @@ func main() {
 			fmt.Println(strings.Join(fields[1:], " "))
 		} else if command == "type" {
 			handleType(fields[1])
+		} else if command == "pwd" {
+			cwd, err := os.Getwd()
+			if err != nil {
+				fmt.Print(err)
+			}
+			fmt.Printf("%s\n", cwd)
 		} else if _, err := exec.LookPath(command); err == nil {
 			cmd := exec.Command(command, fields[1:]...)
 			cmd.Stdout = os.Stdout
