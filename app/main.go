@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-var builtins = []string{"exit", "echo", "type", "pwd"}
+var builtins = []string{"exit", "echo", "type", "pwd", "cd"}
 
 func main() {
 
@@ -23,6 +23,7 @@ func main() {
 				fmt.Println(pwd)
 			}
 		},
+		"cd": handleCd,
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -62,5 +63,13 @@ func handleType(shellArgs []string) {
 		} else {
 			fmt.Printf("%s: not found\n", command)
 		}
+	}
+}
+
+func handleCd(shellArgs []string) {
+	if _, err := os.Stat(shellArgs[0]); err != nil {
+		fmt.Printf("cd: %s: No such file or directory\n", shellArgs[0])
+	} else {
+		os.Chdir(shellArgs[0])
 	}
 }
