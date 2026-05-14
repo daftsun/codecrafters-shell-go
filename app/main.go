@@ -73,8 +73,12 @@ func evalCommand(fields []string) {
 			switch fields[n-2] {
 			case ">", "1>":
 				stdout, _ = os.Create(fields[n-1])
+			case ">>", "1>>":
+				stdout, _ = os.OpenFile(fields[n-1], os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 			case "2>":
 				stderr, _ = os.Create(fields[n-1])
+			case "2>>":
+				stderr, _ = os.OpenFile(fields[n-1], os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 			}
 			fields = fields[:n-2]
 		}
