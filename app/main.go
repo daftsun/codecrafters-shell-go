@@ -14,6 +14,7 @@ import (
 
 type cmdInputs struct {
 	writer io.Writer
+	err    io.Writer
 	args   []string
 }
 
@@ -43,7 +44,7 @@ func handleCd(args cmdInputs) {
 		home_dir, _ := os.UserHomeDir()
 		os.Chdir(home_dir)
 	} else if _, err := os.Stat(args.args[0]); err != nil {
-		fmt.Printf("cd: %s: No such file or directory\n", args.args[0])
+		fmt.Fprintf(args.err, "cd: %s: No such file or directory\n", args.args[0])
 	} else {
 		os.Chdir(args.args[0])
 	}
@@ -63,23 +64,29 @@ func readCommand(reader bufio.Reader) ([]string, error) {
 }
 
 func evalCommand(fields []string) {
-	stdout := os.Stdout
 	n := len(fields)
+	stdout := os.Stdout
+	stderr := os.Stderr
 
-	if n > 2 && (fields[n-2] == ">" || fields[n-2] == "1>") {
-		outputFile, _ := os.Create(fields[n-1])
-		defer outputFile.Close()
-		stdout = outputFile
-		fields = fields[:n-2]
+	if n > 2 {
+		if strings.Contains(fields[n-2], ">") {
+			switch fields[n-2] {
+			case ">", "1>":
+				stdout, _ = os.Create(fields[n-1])
+			case "2>":
+				stderr, _ = os.Create(fields[n-1])
+			}
+			fields = fields[:n-2]
+		}
 	}
 
 	command := fields[0]
 	if cmdFunc, ok := builtins[command]; ok {
-		cmdFunc(cmdInputs{stdout, fields[1:]})
+		cmdFunc(cmdInputs{stdout, stderr, fields[1:]})
 	} else if _, err := exec.LookPath(command); err == nil {
 		cmd := exec.Command(command, fields[1:]...)
 		cmd.Stdout = stdout
-		cmd.Stderr = os.Stderr
+		cmd.Stderr = stderr
 		cmd.Run()
 	} else {
 		fmt.Printf("%s: command not found\n", command)
