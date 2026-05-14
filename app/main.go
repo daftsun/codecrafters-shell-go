@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+
+	"github.com/google/shlex"
 )
 
 var builtins = []string{"exit", "echo", "type", "pwd", "cd"}
@@ -33,9 +35,12 @@ func main() {
 			os.Exit(1)
 		}
 
-		fields := strings.Fields(line)
+		fields, _ := shlex.Split(strings.TrimSpace(line))
 		if len(fields) == 0 {
 			continue
+		}
+		for i, field := range fields {
+			fields[i] = strings.ReplaceAll(field, "#", " ")
 		}
 
 		command := fields[0]
