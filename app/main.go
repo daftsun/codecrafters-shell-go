@@ -2,80 +2,107 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
-	"slices"
 	"strings"
 
 	"github.com/google/shlex"
 )
 
-var builtins = []string{"exit", "echo", "type", "pwd", "cd"}
+type cmdInputs struct {
+	writer io.Writer
+	args   []string
+}
+
+var builtins map[string]func(cmdInputs)
+
+func handleEcho(args cmdInputs) {
+	fmt.Fprintln(args.writer, strings.Join(args.args, " "))
+}
+
+func handleType(args cmdInputs) {
+	if _, ok := builtins[args.args[0]]; ok {
+		fmt.Printf("%s is a shell builtin\n", args.args[0])
+	} else if path, err := exec.LookPath(args.args[0]); err == nil {
+		fmt.Fprintf(args.writer, "%s is %s\n", args.args[0], path)
+	} else {
+		fmt.Printf("%s: not found\n", args.args[0])
+	}
+}
+
+func handlePwd(args cmdInputs) {
+	pwd, _ := os.Getwd()
+	fmt.Fprintln(args.writer, pwd)
+}
+
+func handleCd(args cmdInputs) {
+	if args.args[0] == "~" {
+		home_dir, _ := os.UserHomeDir()
+		os.Chdir(home_dir)
+	} else if _, err := os.Stat(args.args[0]); err != nil {
+		fmt.Printf("cd: %s: No such file or directory\n", args.args[0])
+	} else {
+		os.Chdir(args.args[0])
+	}
+}
+
+func readCommand(reader bufio.Reader) ([]string, error) {
+	line, _, err := reader.ReadLine()
+	if err != nil {
+		return nil, err
+	}
+
+	fields, _ := shlex.Split(strings.TrimSpace(string(line)))
+	if len(fields) == 0 {
+		return nil, errors.New("no command entered")
+	}
+	return fields, nil
+}
+
+func evalCommand(fields []string) {
+	stdout := os.Stdout
+	n := len(fields)
+
+	if n > 2 && (fields[n-2] == ">" || fields[n-2] == "1>") {
+		outputFile, _ := os.Create(fields[n-1])
+		defer outputFile.Close()
+		stdout = outputFile
+		fields = fields[:n-2]
+	}
+
+	command := fields[0]
+	if cmdFunc, ok := builtins[command]; ok {
+		cmdFunc(cmdInputs{stdout, fields[1:]})
+	} else if _, err := exec.LookPath(command); err == nil {
+		cmd := exec.Command(command, fields[1:]...)
+		cmd.Stdout = stdout
+		cmd.Stderr = os.Stderr
+		cmd.Run()
+	} else {
+		fmt.Printf("%s: command not found\n", command)
+	}
+}
 
 func main() {
 
-	cmdFuncMap := map[string]func(shellArgs []string){
-		"exit": func(shellArgs []string) { os.Exit(0) },
-		"echo": func(shellArgs []string) { fmt.Println(strings.Join(shellArgs, " ")) },
+	builtins = map[string]func(cmdInputs){
+		"exit": func(cmdInputs) { os.Exit(0) },
+		"echo": handleEcho,
 		"type": handleType,
-		"pwd": func(shellArgs []string) {
-			pwd, _ := os.Getwd()
-			fmt.Println(pwd)
-		},
-		"cd": handleCd,
+		"pwd":  handlePwd,
+		"cd":   handleCd,
 	}
 
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		fmt.Print("$ ")
-		line, err := reader.ReadString('\n')
+		fields, err := readCommand(*reader)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Error reading input: ", err)
-			os.Exit(1)
-		}
-
-		fields, _ := shlex.Split(strings.TrimSpace(line))
-		if len(fields) == 0 {
 			continue
 		}
-		for i, field := range fields {
-			fields[i] = strings.ReplaceAll(field, "#", " ")
-		}
-
-		command := fields[0]
-		if cmdFunc, ok := cmdFuncMap[command]; ok {
-			cmdFunc(fields[1:])
-		} else if _, err := exec.LookPath(command); err == nil {
-			cmd := exec.Command(command, fields[1:]...)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Run()
-		} else {
-			fmt.Printf("%s: command not found\n", command)
-		}
-	}
-}
-
-func handleType(shellArgs []string) {
-	for _, command := range shellArgs {
-		if slices.Contains(builtins, command) {
-			fmt.Printf("%s is a shell builtin\n", command)
-		} else if path, err := exec.LookPath(command); err == nil {
-			fmt.Printf("%s is %s\n", command, path)
-		} else {
-			fmt.Printf("%s: not found\n", command)
-		}
-	}
-}
-
-func handleCd(shellArgs []string) {
-	if shellArgs[0] == "~" {
-		home_dir, _ := os.UserHomeDir()
-		os.Chdir(home_dir)
-	} else if _, err := os.Stat(shellArgs[0]); err != nil {
-		fmt.Printf("cd: %s: No such file or directory\n", shellArgs[0])
-	} else {
-		os.Chdir(shellArgs[0])
+		evalCommand(fields)
 	}
 }
