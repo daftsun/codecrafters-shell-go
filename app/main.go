@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/chzyer/readline"
 	"github.com/google/shlex"
 )
 
@@ -50,8 +50,8 @@ func handleCd(args cmdInputs) {
 	}
 }
 
-func readCommand(reader bufio.Reader) ([]string, error) {
-	line, _, err := reader.ReadLine()
+func readCommand(reader readline.Instance) ([]string, error) {
+	line, err := reader.Readline()
 	if err != nil {
 		return nil, err
 	}
@@ -63,14 +63,15 @@ func readCommand(reader bufio.Reader) ([]string, error) {
 	return fields, nil
 }
 
-func evalCommand(fields []string) {
-	n := len(fields)
+func handleRedirection(fields []string) (io.Writer, io.Writer, []string) {
 	stdout := os.Stdout
 	stderr := os.Stderr
+	n := len(fields)
 
 	if n > 2 {
-		if strings.Contains(fields[n-2], ">") {
-			switch fields[n-2] {
+		check_field := fields[n-2]
+		if strings.Contains(check_field, ">") {
+			switch check_field {
 			case ">", "1>":
 				stdout, _ = os.Create(fields[n-1])
 			case ">>", "1>>":
@@ -83,6 +84,11 @@ func evalCommand(fields []string) {
 			fields = fields[:n-2]
 		}
 	}
+	return stdout, stderr, fields
+}
+
+func evalCommand(fields []string) {
+	stdout, stderr, fields := handleRedirection(fields)
 
 	command := fields[0]
 	if cmdFunc, ok := builtins[command]; ok {
@@ -107,7 +113,25 @@ func main() {
 		"cd":   handleCd,
 	}
 
-	reader := bufio.NewReader(os.Stdin)
+	completer := readline.NewPrefixCompleter(
+		readline.PcItem("echo"),
+		readline.PcItem("type"),
+		readline.PcItem("pwd"),
+		readline.PcItem("cd"),
+		readline.PcItem("exit"),
+	)
+
+	reader, err := readline.NewEx(&readline.Config{
+		Prompt:          "$ ",
+		AutoComplete:    completer,
+		InterruptPrompt: "^C",
+	})
+	if err != nil {
+		fmt.Println("Error initializing readline:", err)
+		return
+	}
+	defer reader.Close()
+
 	for {
 		fmt.Print("$ ")
 		fields, err := readCommand(*reader)
