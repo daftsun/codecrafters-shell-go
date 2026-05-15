@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/chzyer/readline"
@@ -103,38 +105,18 @@ func evalCommand(fields []string) {
 	}
 }
 
-type CustomCompleter struct {
-	commands []string
+type RingingAutocompleter struct {
+	handler readline.AutoCompleter
 }
 
-// Do intercepts the line and word to find matching items
-func (c *CustomCompleter) Do(line []rune, pos int) (newLine [][]rune, length int) {
-	var matches [][]rune
-	word := ""
+func (m *RingingAutocompleter) Do(line []rune, pos int) ([][]rune, int) {
+	newLine, length := m.handler.Do(line, pos)
 
-	// Extract the word currently being typed before the cursor position
-	if pos > 0 {
-		currentLine := string(line[:pos])
-		words := strings.Fields(currentLine)
-		if len(words) > 0 {
-			word = words[len(words)-1]
-		}
-	}
-
-	// Filter commands that start with the typed string
-	for _, cmd := range c.commands {
-		if strings.HasPrefix(cmd, word) {
-			matches = append(matches, []rune(cmd[len(word):]))
-		}
-	}
-
-	// Trigger the terminal bell if no completion matches exist
-	if len(matches) == 0 {
+	if length == 0 && len(line) > 0 {
 		fmt.Print("\a")
-		return nil, 0
 	}
 
-	return matches, len(word)
+	return newLine, length
 }
 
 func main() {
@@ -147,12 +129,27 @@ func main() {
 		"cd":   handleCd,
 	}
 
-	completer := &CustomCompleter{[]string{"exit ", "echo ", "type ", "pwd ", "cd "}}
+	var completer []readline.PrefixCompleterInterface
+	for k := range maps.Keys(builtins) {
+		completer = append(completer, readline.PcItem(k))
+	}
+	paths := filepath.SplitList(os.Getenv("PATH"))
+	for _, path := range paths {
+		files, _ := os.ReadDir(path)
+		for _, file := range files {
+			finfo, _ := file.Info()
+			if !finfo.IsDir() && finfo.Mode().Perm()&0111 != 0 {
+				completer = append(completer, readline.PcItem(finfo.Name()))
+			}
+		}
+	}
 
 	reader, err := readline.NewEx(&readline.Config{
 		Prompt:          "$ ",
-		AutoComplete:    completer,
+		AutoComplete:    &RingingAutocompleter{readline.NewPrefixCompleter(completer...)},
 		InterruptPrompt: "^C",
+		HistoryFile:     "/tmp/shell_hist.txt",
+		HistoryLimit:    10,
 	})
 	if err != nil {
 		fmt.Println("Error initializing readline:", err)
