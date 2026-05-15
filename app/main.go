@@ -103,6 +103,40 @@ func evalCommand(fields []string) {
 	}
 }
 
+type CustomCompleter struct {
+	commands []string
+}
+
+// Do intercepts the line and word to find matching items
+func (c *CustomCompleter) Do(line []rune, pos int) (newLine [][]rune, length int) {
+	var matches [][]rune
+	word := ""
+
+	// Extract the word currently being typed before the cursor position
+	if pos > 0 {
+		currentLine := string(line[:pos])
+		words := strings.Fields(currentLine)
+		if len(words) > 0 {
+			word = words[len(words)-1]
+		}
+	}
+
+	// Filter commands that start with the typed string
+	for _, cmd := range c.commands {
+		if strings.HasPrefix(cmd, word) {
+			matches = append(matches, []rune(cmd[len(word):]))
+		}
+	}
+
+	// Trigger the terminal bell if no completion matches exist
+	if len(matches) == 0 {
+		fmt.Print("\a")
+		return nil, 0
+	}
+
+	return matches, len(word)
+}
+
 func main() {
 
 	builtins = map[string]func(cmdInputs){
@@ -113,13 +147,7 @@ func main() {
 		"cd":   handleCd,
 	}
 
-	completer := readline.NewPrefixCompleter(
-		readline.PcItem("echo"),
-		readline.PcItem("type"),
-		readline.PcItem("pwd"),
-		readline.PcItem("cd"),
-		readline.PcItem("exit"),
-	)
+	completer := &CustomCompleter{[]string{"exit ", "echo ", "type ", "pwd ", "cd "}}
 
 	reader, err := readline.NewEx(&readline.Config{
 		Prompt:          "$ ",
@@ -133,7 +161,6 @@ func main() {
 	defer reader.Close()
 
 	for {
-		fmt.Print("$ ")
 		fields, err := readCommand(*reader)
 		if err != nil {
 			continue
