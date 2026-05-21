@@ -1,5 +1,3 @@
-[![progress-banner](https://backend.codecrafters.io/progress/shell/1ce554dd-68cb-469e-9127-d9010abd66b7)](https://app.codecrafters.io/users/daftsun?r=2qF)
-
 This is a starting point for Go solutions to the
 ["Build Your Own Shell" Challenge](https://app.codecrafters.io/courses/shell/overview).
 
